@@ -14,4 +14,4 @@ runs:
     - name: Run cleanup script
       shell: bash
       run: |
-        ./cleanup.sh "${{ inputs.age }}"
+        $GITHUB_ACTION_PATH/cleanup.sh "${{ inputs.age }}"
