@@ -14,5 +14,4 @@ runs:
     - name: Run cleanup script
       shell: bash
       run: |
-        chmod +x cleanup.sh
         ./cleanup.sh "${{ inputs.age }}"
