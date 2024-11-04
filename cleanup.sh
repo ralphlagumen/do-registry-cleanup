@@ -4,15 +4,19 @@
 AGE=$1
 
 # Check if `doctl` is installed (skip if MOCK_MODE is enabled)
-if [[ "$MOCK_MODE" != "true" && ! command -v doctl &> /dev/null ]]; then
-  echo "Error: doctl is not installed. Please install doctl before running this action."
-  exit 1
+if [[ "$MOCK_MODE" != "true" ]]; then
+  if ! command -v doctl &> /dev/null; then
+    echo "Error: doctl is not installed. Please install doctl before running this action."
+    exit 1
+  fi
 fi
 
 # Check if `doctl` is authenticated (skip if MOCK_MODE is enabled)
-if [[ "$MOCK_MODE" != "true" && ! doctl auth init &>/dev/null ]]; then
-  echo "Error: doctl is not authenticated. Please run 'doctl auth init' or 'doctl registry login' before using this action."
-  exit 1
+if [[ "$MOCK_MODE" != "true" ]]; then
+  if ! doctl auth init &>/dev/null; then
+    echo "Error: doctl is not authenticated. Please run 'doctl auth init' or 'doctl registry login' before using this action."
+    exit 1
+  fi
 fi
 
 # Validate the `AGE` input

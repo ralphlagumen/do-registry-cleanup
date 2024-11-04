@@ -14,8 +14,8 @@ jobs:
 
       - name: Missing doctl test
         env:
-            MOCK_MODE: true
-            PATH: ""
+          MOCK_MODE: true
+          PATH: ""
         run: |
           echo "Simulating missing doctl..."
           ./cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
@@ -29,7 +29,7 @@ jobs:
 
       - name: Invalid age format test
         env:
-            MOCK_MODE: true
+          MOCK_MODE: true
         run: |
           echo "Testing invalid age format..."
           ./cleanup.sh "invalid" || echo "Test passed: 'invalid age format' error displayed."
