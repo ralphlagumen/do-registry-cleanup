@@ -1,0 +1,18 @@
+# action.yml
+name: "DigitalOcean Registry Cleanup"
+description: "Cleans up DigitalOcean container registry images older than a specified age."
+author: "ralphlagumen"
+inputs:
+  age:
+    description: "The age threshold for deleting images (e.g., 7d, 2w, 1m)"
+    required: true
+    default: "7d"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run cleanup script
+      shell: bash
+      run: |
+        chmod +x cleanup.sh
+        ./cleanup.sh "${{ inputs.age }}"

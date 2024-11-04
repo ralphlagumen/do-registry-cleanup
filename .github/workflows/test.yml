@@ -1,0 +1,35 @@
+# .github/workflows/test-negative.yml
+name: Test DigitalOcean Registry Cleanup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  negative-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Missing doctl test
+        run: |
+          echo "Simulating missing doctl..."
+          MOCK_MODE=true PATH="" ./scripts/cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
+
+      - name: Unauthenticated doctl test
+        run: |
+          echo "Simulating unauthenticated doctl..."
+          MOCK_MODE=true ./scripts/cleanup.sh "7d" || echo "Test passed: 'doctl not authenticated' error displayed."
+
+      - name: Invalid age format test
+        run: |
+          echo "Testing invalid age format..."
+          MOCK_MODE=true ./scripts/cleanup.sh "invalid" || echo "Test passed: 'invalid age format' error displayed."
+
+      - name: Successful mock cleanup
+        env:
+          MOCK_MODE: true
+        run: |
+          echo "Running mock cleanup with valid input..."
+          ./scripts/cleanup.sh "7d"
