@@ -15,9 +15,10 @@ jobs:
       - name: Missing doctl test
         env:
             MOCK_MODE: true
+            PATH: ""
         run: |
           echo "Simulating missing doctl..."
-          PATH="" ./cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
+          ./cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
 
       - name: Unauthenticated doctl test
         env:
