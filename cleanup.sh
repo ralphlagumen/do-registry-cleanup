@@ -23,6 +23,9 @@ fi
 if [[ -z "$AGE" ]]; then
   echo "Error: Age parameter is required (e.g., '7d' for 7 days, '2w' for 2 weeks, or '1m' for 1 month)."
   exit 1
+elif [[ ! "$AGE" =~ ^[0-9]+[dwm]$ ]]; then
+  echo "Error: Invalid age format. Use a valid format such as '7d' for 7 days, '2w' for 2 weeks, or '1m' for 1 month."
+  exit 1
 fi
 
 # Convert `AGE` to seconds
@@ -39,7 +42,7 @@ THRESHOLD_DATE=$(date -d "@$(( $(date +%s) - AGE_SECONDS ))" +%Y-%m-%dT%H:%M:%SZ
 
 # Mock `doctl` outputs for testing if MOCK_MODE is enabled
 if [[ "$MOCK_MODE" == "true" ]]; then
-  echo "MOCK MODE: Skipping actual `doctl` commands."
+  echo "MOCK MODE: Skipping actual doctl commands."
   repositories=("mock-repo")
   images="digest1 2024-01-01T12:00:00Z
 digest2 2024-10-10T12:00:00Z"

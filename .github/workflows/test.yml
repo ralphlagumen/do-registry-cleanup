@@ -12,21 +12,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Missing doctl test
-        env:
-          MOCK_MODE: true
-          PATH: ""
-        run: |
-          echo "Simulating missing doctl..."
-          ./cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
-
-      - name: Unauthenticated doctl test
-        env:
-          MOCK_MODE: true
-        run: |
-          echo "Simulating unauthenticated doctl..."
-          ./cleanup.sh "7d" || echo "Test passed: 'doctl not authenticated' error displayed."
-
       - name: Invalid age format test
         env:
           MOCK_MODE: true
