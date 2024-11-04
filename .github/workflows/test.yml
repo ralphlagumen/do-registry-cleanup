@@ -15,21 +15,21 @@ jobs:
       - name: Missing doctl test
         run: |
           echo "Simulating missing doctl..."
-          MOCK_MODE=true PATH="" ./scripts/cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
+          MOCK_MODE=true PATH="" ./cleanup.sh "7d" || echo "Test passed: 'doctl not installed' error displayed."
 
       - name: Unauthenticated doctl test
         run: |
           echo "Simulating unauthenticated doctl..."
-          MOCK_MODE=true ./scripts/cleanup.sh "7d" || echo "Test passed: 'doctl not authenticated' error displayed."
+          MOCK_MODE=true ./cleanup.sh "7d" || echo "Test passed: 'doctl not authenticated' error displayed."
 
       - name: Invalid age format test
         run: |
           echo "Testing invalid age format..."
-          MOCK_MODE=true ./scripts/cleanup.sh "invalid" || echo "Test passed: 'invalid age format' error displayed."
+          MOCK_MODE=true ./cleanup.sh "invalid" || echo "Test passed: 'invalid age format' error displayed."
 
       - name: Successful mock cleanup
         env:
           MOCK_MODE: true
         run: |
           echo "Running mock cleanup with valid input..."
-          ./scripts/cleanup.sh "7d"
+          ./cleanup.sh "7d"
