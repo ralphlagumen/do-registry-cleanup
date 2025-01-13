@@ -7,11 +7,27 @@ inputs:
     description: "The age threshold for deleting images (e.g., 7d, 2w, 1m)"
     required: true
     default: "7d"
+  debug_mode:
+    description: "Enable debug mode for verbose output (true/false)."
+    required: false
+    default: "false"
+  mock_mode:
+    description: "Enable mock mode for testing (true/false)."
+    required: false
+    default: "false"
+  skip_repositories:
+    description: "Comma-separated list of repositories to skip during cleanup."
+    required: false
+    default: ""
 
 runs:
   using: "composite"
   steps:
     - name: Run cleanup script
       shell: bash
+      env:
+        DEBUG_MODE: "${{ inputs.debug_mode }}"
+        MOCK_MODE: "${{ inputs.mock_mode }}"
+        SKIP_REPOSITORIES: "${{ inputs.skip_repositories }}"
       run: |
         $GITHUB_ACTION_PATH/cleanup.sh "${{ inputs.age }}"

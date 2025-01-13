@@ -22,6 +22,7 @@ jobs:
       - name: Successful mock cleanup
         env:
           MOCK_MODE: true
+          DEBUG_MODE: true
         run: |
           echo "Running mock cleanup with valid input..."
           ./cleanup.sh "7d"

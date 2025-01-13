@@ -2,6 +2,16 @@
 
 # Input: age threshold (e.g., 7d, 2w, 1m)
 AGE=$1
+DEBUG_MODE=${DEBUG_MODE:-false}
+MOCK_MODE=${MOCK_MODE:-false}
+SKIP_REPOSITORIES=${SKIP_REPOSITORIES:-""}
+
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  set -x  # Enable debug mode
+fi
+
+# Convert skipped repositories to an array
+IFS=',' read -r -a exempted <<< "$SKIP_REPOSITORIES"
 
 # Check if `doctl` is installed (skip if MOCK_MODE is enabled)
 if [[ "$MOCK_MODE" != "true" ]]; then
@@ -53,6 +63,12 @@ fi
 
 # Process each repository
 for repo in $repositories; do
+  # Skip exempted repositories
+  if [[ " ${exempted[@]} " =~ " $repo " ]]; then
+    echo "Skipping repository: $repo"
+    continue
+  fi
+
   echo "Processing repository: $repo"
   if [[ "$MOCK_MODE" == "true" ]]; then
     # Use mock images data
