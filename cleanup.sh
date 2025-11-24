@@ -1,30 +1,19 @@
 #!/bin/bash
 
-# Usage: ./cleanup_docr_images.sh <age>
-# Example: ./cleanup_docr_images.sh 14d
+# Usage: ./cleanup_do_tags.sh 14d
+# Deletes TAGS older than the given age.
+# DigitalOcean automatically cleans up manifests + blobs afterwards.
 
 AGE=$1
 DEBUG_MODE=${DEBUG_MODE:-false}
-MOCK_MODE=${MOCK_MODE:-false}
+DRY_RUN=${DRY_RUN:-false}
 SKIP_REPOSITORIES=${SKIP_REPOSITORIES:-""}
 
 if [[ "$DEBUG_MODE" == "true" ]]; then
   set -x
 fi
 
-IFS=',' read -r -a exempted <<< "$SKIP_REPOSITORIES"
-
-# --- Prerequisites ---
-if [[ "$MOCK_MODE" != "true" ]]; then
-  if ! command -v doctl &> /dev/null; then
-    echo "❌ Error: doctl not installed. Install before running this script."
-    exit 1
-  fi
-  if ! doctl auth init &>/dev/null; then
-    echo "❌ Error: doctl not authenticated. Run 'doctl registry login' first."
-    exit 1
-  fi
-fi
+IFS=',' read -r -a EXEMPTED <<< "$SKIP_REPOSITORIES"
 
 # --- Validate AGE ---
 if [[ -z "$AGE" ]]; then
@@ -42,63 +31,63 @@ case "$AGE" in
   *m) AGE_SECONDS=$(( ${AGE%m} * 2592000 )) ;;
 esac
 
-THRESHOLD_DATE=$(date -d "@$(( $(date +%s) - AGE_SECONDS ))" +%Y-%m-%dT%H:%M:%SZ)
-echo "🧹 Cleaning images older than $THRESHOLD_DATE"
+THRESHOLD_SECS=$(( $(date +%s) - AGE_SECONDS ))
+THRESHOLD_DATE=$(date -d "@$THRESHOLD_SECS" +%Y-%m-%dT%H:%M:%SZ)
 
-# --- Get repositories ---
-if [[ "$MOCK_MODE" == "true" ]]; then
-  echo "🧪 MOCK MODE ENABLED"
-  repositories=("mock-repo")
-  manifests="digest1 application/vnd.docker.distribution.manifest.list.v2+json 2024-01-01T12:00:00Z
-digest2 application/vnd.docker.distribution.manifest.v2+json 2024-10-10T12:00:00Z"
-else
-  repositories=$(doctl registry repository list --format Name --no-header)
+echo "🧹 Cleaning TAGS older than: $THRESHOLD_DATE"
+echo "DRY_RUN: $DRY_RUN"
+echo ""
+
+# --- Ensure doctl is authenticated ---
+if ! command -v doctl &> /dev/null; then
+  echo "❌ Error: doctl not installed."
+  exit 1
+fi
+if ! doctl registry validate >/dev/null 2>&1; then
+  echo "❌ Error: doctl not authenticated. Run: doctl registry login"
+  exit 1
 fi
 
-# --- Iterate repositories ---
-for repo in $repositories; do
-  if [[ " ${exempted[@]} " =~ " $repo " ]]; then
-    echo "⚙️  Skipping exempted repository: $repo"
+# --- List all repositories ---
+REPOS=$(doctl registry repository list --format Name --no-header)
+
+for repo in $REPOS; do
+  # Skip repositories in EXEMPTED
+  if [[ " ${EXEMPTED[@]} " =~ " $repo " ]]; then
+    echo "⚙️  Skipping exempted repo: $repo"
     continue
   fi
 
   echo "📦 Processing repository: $repo"
 
-  if [[ "$MOCK_MODE" == "true" ]]; then
-    manifest_list="$manifests"
-  else
-    manifest_list=$(doctl registry repository list-manifests $repo \
-      --format Digest,MediaType,UpdatedAt --no-header)
-  fi
+  # Fetch tags with timestamps
+  TAGS_JSON=$(doctl registry repository list-tags "$repo" --output json)
+  TAG_COUNT=$(echo "$TAGS_JSON" | jq length)
 
-  if [[ -z "$manifest_list" ]]; then
-    echo "ℹ️  No manifests found in $repo"
+  if [[ "$TAG_COUNT" -eq 0 ]]; then
+    echo "ℹ️  No tags found."
+    echo ""
     continue
   fi
 
-  while IFS= read -r image; do
-    digest=$(echo "$image" | awk '{print $1}')
-    mediatype=$(echo "$image" | awk '{print $2}')
-    updated_at=$(echo "$image" | awk '{print $3}')
+  # Iterate through tags
+  echo "$TAGS_JSON" | jq -c '.[]' | while read -r tag; do
+    tag_name=$(echo "$tag" | jq -r '.tag')
+    updated_at=$(echo "$tag" | jq -r '.updated_at')
 
-    # Only delete parent manifest lists
-    if [[ "$mediatype" != "application/vnd.docker.distribution.manifest.list.v2+json" ]]; then
-      echo "⏭️  Skipping child manifest $digest ($mediatype)"
-      continue
-    fi
+    # Convert updated_at → seconds
+    UPDATED_SECS=$(date -d "$updated_at" +%s)
 
-    if [[ "$updated_at" < "$THRESHOLD_DATE" ]]; then
-      echo "🗑️  Deleting parent manifest $digest from $repo (updated at $updated_at)"
-      if [[ "$MOCK_MODE" != "true" ]]; then
-        doctl registry repository delete-manifest $repo $digest --force || \
-          echo "⚠️  Warning: Failed to delete $digest from $repo"
-      else
-        echo "🧪 MOCK: Would delete $digest from $repo"
+    if (( UPDATED_SECS < THRESHOLD_SECS )); then
+      echo "🗑️  DELETE: $repo:$tag_name (updated $updated_at)"
+      if [[ "$DRY_RUN" != "true" ]]; then
+        doctl registry repository delete-tag "$repo" "$tag_name" --force || \
+          echo "⚠️  Warning: failed to delete tag: $tag_name"
       fi
     else
-      echo "✅ Keeping $digest (updated at $updated_at)"
+      echo "✅ KEEP:   $repo:$tag_name (updated $updated_at)"
     fi
-  done <<< "$manifest_list"
+  done
 
   echo ""
 done
