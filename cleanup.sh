@@ -2,7 +2,7 @@
 
 # Usage: ./cleanup_do_tags.sh 14d
 # Deletes TAGS older than the given age.
-# If a repository has NO tags (only manifests/digests),
+# If a repository has NO valid tags (only manifests/digests),
 # it will delete old manifest digests instead.
 
 AGE=$1
@@ -16,7 +16,6 @@ fi
 
 IFS=',' read -r -a EXEMPTED <<< "$SKIP_REPOSITORIES"
 
-# --- Validate AGE ---
 if [[ -z "$AGE" ]]; then
   echo "❌ Error: Age parameter is required (e.g. 7d, 2w, 1m)"
   exit 1
@@ -25,7 +24,6 @@ elif [[ ! "$AGE" =~ ^[0-9]+[dwm]$ ]]; then
   exit 1
 fi
 
-# --- Convert AGE to seconds ---
 case "$AGE" in
   *d) AGE_SECONDS=$(( ${AGE%d} * 86400 )) ;;
   *w) AGE_SECONDS=$(( ${AGE%w} * 604800 )) ;;
@@ -39,7 +37,6 @@ echo "🧹 Cleaning items older than: $THRESHOLD_DATE"
 echo "DRY_RUN: $DRY_RUN"
 echo ""
 
-# --- Ensure doctl is authenticated ---
 if ! command -v doctl &> /dev/null; then
   echo "❌ Error: doctl not installed."
   exit 1
@@ -49,11 +46,10 @@ if ! doctl registry validate >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- List all repositories ---
 REPOS=$(doctl registry repository list --format Name --no-header)
 
 for repo in $REPOS; do
-  # Skip repositories in EXEMPTED
+
   if [[ " ${EXEMPTED[@]} " =~ " $repo " ]]; then
     echo "⚙️  Skipping exempted repo: $repo"
     continue
@@ -61,61 +57,65 @@ for repo in $REPOS; do
 
   echo "📦 Processing repository: $repo"
 
-  # Fetch tags with timestamps
   TAGS_JSON=$(doctl registry repository list-tags "$repo" --output json 2>/dev/null)
 
   # Validate JSON
   if ! echo "$TAGS_JSON" | jq empty 2>/dev/null; then
-    echo "⚠️  Invalid or empty tag JSON for $repo. Processing manifests instead..."
-    TAG_COUNT=0
+    echo "⚠️  Invalid tag JSON for $repo. Treating as tagless."
+    VALID_TAG_COUNT=0
   else
-    TAG_COUNT=$(echo "$TAGS_JSON" | jq length)
+    VALID_TAG_COUNT=$(echo "$TAGS_JSON" | jq '[ .[] | select(.tag != null and .tag != "") ] | length')
   fi
 
-  # ★ ★ ★ TAG CLEANUP (Normal cleanup path)
-  if [[ "$TAG_COUNT" -gt 0 ]]; then
-    echo "🔹 $repo has $TAG_COUNT tag(s). Cleaning old tags..."
+  if [[ "$VALID_TAG_COUNT" -gt 0 ]]; then
+    echo "🔹 $repo has $VALID_TAG_COUNT valid tag(s). Cleaning tags..."
 
     echo "$TAGS_JSON" | jq -c '.[]' | while read -r tag; do
+
+      # skip malformed
+      if ! echo "$tag" | jq -e 'has("tag") and (.tag|type=="string") and (.tag != "")' >/dev/null; then
+        continue
+      fi
+
       tag_name=$(echo "$tag" | jq -r '.tag')
       updated_at=$(echo "$tag" | jq -r '.updated_at')
-      UPDATED_SECS=$(date -d "$updated_at" +%s)
+      UPDATED_SECS=$(date -d "$updated_at" +%s 2>/dev/null || echo 0)
 
       if (( UPDATED_SECS < THRESHOLD_SECS )); then
         echo "🗑️  DELETE TAG: $repo:$tag_name (updated $updated_at)"
         if [[ "$DRY_RUN" != "true" ]]; then
           doctl registry repository delete-tag "$repo" "$tag_name" --force || \
-            echo "⚠️  Failed to delete tag: $tag_name"
+            echo "⚠️ Failed to delete tag: $tag_name"
         fi
       else
         echo "✅ KEEP TAG:   $repo:$tag_name (updated $updated_at)"
       fi
+
     done
 
     echo ""
-    continue  # move to next repo
+    continue
   fi
 
-  # ★ ★ ★ MANIFEST CLEANUP (Fallback path for repos with NO tags)
-  echo "ℹ️  $repo has NO TAGS — cleaning manifests (digests) instead."
+
+  echo "ℹ️  $repo has NO VALID TAGS — cleaning manifests..."
 
   MANIFESTS_JSON=$(doctl registry repository list-manifests "$repo" --output json)
 
   echo "$MANIFESTS_JSON" | jq -c '.[]' | while read -r manifest; do
     digest=$(echo "$manifest" | jq -r '.digest')
     updated_at=$(echo "$manifest" | jq -r '.updated_at')
-    UPDATED_SECS=$(date -d "$updated_at" +%s)
+    UPDATED_SECS=$(date -d "$updated_at" +%s 2>/dev/null || echo 0)
 
     if (( UPDATED_SECS < THRESHOLD_SECS )); then
       echo "🗑️  DELETE DIGEST: $repo@$digest (updated $updated_at)"
       if [[ "$DRY_RUN" != "true" ]]; then
         doctl registry repository delete-manifest "$repo" "$digest" --force || \
-          echo "⚠️  Failed to delete manifest: $digest"
+          echo "⚠️ Failed to delete manifest: $digest"
       fi
     else
       echo "✅ KEEP DIGEST:   $repo@$digest (updated $updated_at)"
     fi
-
   done
 
   echo ""
